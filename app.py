@@ -1,68 +1,87 @@
+import pandas as pd
+from flask import Flask, request, jsonify, render_template
+import pickle
+import numpy as np
+import os
+import warnings
+from sklearn.preprocessing import LabelEncoder
 
-# from flask import Flask, request, jsonify
-# import pickle
-# import os
-# import numpy as np
-# import warnings
+warnings.filterwarnings('ignore')
 
-# warnings.filterwarnings('ignore')
+# --- INITIALIZATION ---
+app = Flask(__name__)
 
-# app = Flask(__name__)
+# --- ROUTES ---
 
-# # Load the trained model and scaler from the 'models' directory
-# try:
-#     # We'll use the best model found in the notebook, XGBoost
-#     # model_path = os.path.join(os.getcwd(), r'image\models', 'XGBoost.pkl')
-#     #with open(model_path, 'rb') as file:
-#     #    model = pickle.load(file)
-#     #print("Model loaded successfully.")
+@app.route('/')
+def home():
+    """
+    Renders the home page of the web application.
+    """
+    return render_template('index.html')  # Make sure templates/index.html exists
 
-#     # We also need the scaler used for the SVM model, though XGBoost doesn't strictly need it,
-#     # it's good practice to have the same data pre-processing in the API as in training.
-#     # The original notebook didn't save the scaler, so we'll re-fit it for demonstration.
-#     # In a real-world scenario, you would save and load the scaler as well.
-#     from sklearn.preprocessing import MinMaxScaler
-#     df = pd.read_csv(r'image\Crop_recommendation.csv') # Re-load the data to fit the scaler
-#     features = df[['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall']]
-#     scaler = MinMaxScaler().fit(features)
-#     print("Scaler re-fitted successfully.")
 
-# except (FileNotFoundError, IOError, pickle.PickleError) as e:
-#     print(f"Error loading model: {e}")
-#     model = None
-#     scaler = None
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        data = request.get_json(force=True)
+        print("Received data:", data)
 
-# @app.route("/predict", methods=["POST"])
-# def predict():
-#     if model is None or scaler is None:
-#         return jsonify({"error": "Model or scaler not loaded. Please check server logs."}), 500
+        # Extract features
+        N = data['N']
+        P = data['P']
+        K = data['K']
+        temperature = data['temperature']
+        humidity = data['humidity']
+        ph = data['ph']
+        rainfall = data['rainfall']
 
-#     try:
-#         data = request.get_json(force=True)
-#         required_fields = ['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall']
-        
-#         # Check for missing fields
-#         for field in required_fields:
-#             if field not in data:
-#                 return jsonify({"error": f"Missing field: '{field}'"}), 400
+        # Prepare input for model
+        input_features = np.array([[N, P, K, temperature, humidity, ph, rainfall]])
 
-#         # Create a numpy array from the JSON data
-#         features = np.array([[
-#             data['N'], data['P'], data['K'], data['temperature'],
-#             data['humidity'], data['ph'], data['rainfall']
-#         ]])
+        # Use a model (RandomForest recommended)
+        prediction = RF.predict(input_features)
+        predicted_class = prediction[0]
 
-#         # The XGBoost model was trained on unscaled data, so we don't need to scale the input.
-#         # But if you chose to use the SVM model, you would uncomment the next line:
-#         # features_scaled = scaler.transform(features)
+        # Decode predicted class index to crop name
+        crop_name = crop_dict.get(predicted_class, "Unknown")
 
-#         # Predict using the loaded model
-#         prediction = model.predict(features)[0]
+        return jsonify({"crop_recommendation": crop_name})
 
-#         return jsonify({"recommended_crop": str(prediction)})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
 
-# if __name__ == "__main__":
-#     app.run(debug=True, host='0.0.0.0', port=5000)
+# --- MODEL LOADING ---
+
+try:
+    with open('models/DecisionTree.pkl', 'rb') as file:
+        DecisionTree = pickle.load(file)
+    with open('models/NBClassifier.pkl', 'rb') as file:
+        NaiveBayes = pickle.load(file)
+    with open('models/SVMClassifier.pkl', 'rb') as file:
+        SVM = pickle.load(file)
+    with open('models/LogisticRegression.pkl', 'rb') as file:
+        LogReg = pickle.load(file)
+    with open('models/RandomForest.pkl', 'rb') as file:
+        RF = pickle.load(file)
+    print("All models loaded successfully!")
+except FileNotFoundError:
+    print("Error: Model files not found. Please ensure the 'models' directory and its contents are present.")
+    exit()
+
+
+try:
+    df_labels = pd.read_csv('Crop_recommendation.csv')
+    le = LabelEncoder()
+    le.fit_transform(df_labels['label'])
+    crop_dict = dict(zip(le.transform(le.classes_), le.classes_))
+    print("Label Encoder recreated successfully!")
+except FileNotFoundError:
+    print("Error: 'Crop_recommendation.csv' not found. Cannot recreate Label Encoder.")
+    exit()
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
