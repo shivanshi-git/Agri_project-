@@ -10,11 +10,14 @@ COPY requirements.txt .
 # Step 4: Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Step 5: Copy all project files into container
-COPY . .
+# Step 5: Copy everything (including templates) into container
+COPY . /app
 
-# Step 6: Expose the port Flask will run on
+# Step 6: Verify templates directory exists (debug step)
+RUN ls -R /app
+
+# Step 7: Expose port
 EXPOSE 5000
 
-# Step 7: Run your Flask app using Gunicorn
+# Step 8: Run app with Gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
