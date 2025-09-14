@@ -9,7 +9,8 @@ import traceback
 
 warnings.filterwarnings('ignore')
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
+
 
 @app.route('/')
 def home():
