@@ -5,20 +5,16 @@ import numpy as np
 import os
 import warnings
 from sklearn.preprocessing import LabelEncoder
+import traceback
 
 warnings.filterwarnings('ignore')
 
-# --- INITIALIZATION ---
 app = Flask(__name__)
-
-# --- ROUTES ---
 
 @app.route('/')
 def home():
-    """
-    Renders the home page of the web application.
-    """
-    return render_template('index.html')  # Make sure templates/index.html exists
+    """Renders the home page of the web application."""
+    return render_template('index.html')
 
 
 @app.route('/predict', methods=['POST'])
@@ -27,33 +23,33 @@ def predict():
         data = request.get_json(force=True)
         print("Received data:", data)
 
-        # Extract features
-        N = data['N']
-        P = data['P']
-        K = data['K']
-        temperature = data['temperature']
-        humidity = data['humidity']
-        ph = data['ph']
-        rainfall = data['rainfall']
+        # Convert to float
+        N = float(data['N'])
+        P = float(data['P'])
+        K = float(data['K'])
+        temperature = float(data['temperature'])
+        humidity = float(data['humidity'])
+        ph = float(data['ph'])
+        rainfall = float(data['rainfall'])
 
         # Prepare input for model
         input_features = np.array([[N, P, K, temperature, humidity, ph, rainfall]])
 
-        # Use a model (RandomForest recommended)
+        # Predict using RandomForest
         prediction = RF.predict(input_features)
         predicted_class = prediction[0]
 
-        # Decode predicted class index to crop name
+        # Decode class
         crop_name = crop_dict.get(predicted_class, "Unknown")
 
         return jsonify({"crop_recommendation": crop_name})
 
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)})
 
 
 # --- MODEL LOADING ---
-
 try:
     with open('models/DecisionTree.pkl', 'rb') as file:
         DecisionTree = pickle.load(file)
@@ -70,9 +66,10 @@ except FileNotFoundError:
     print("Error: Model files not found. Please ensure the 'models' directory and its contents are present.")
     exit()
 
-
+# Recreate label encoder
+# Recreate label encoder
 try:
-    df_labels = pd.read_csv('Crop_recommendation.csv')
+    df_labels = pd.read_csv('Crop_recommendation.csv')  # ✅ Corrected to CSV
     le = LabelEncoder()
     le.fit_transform(df_labels['label'])
     crop_dict = dict(zip(le.transform(le.classes_), le.classes_))
@@ -80,6 +77,7 @@ try:
 except FileNotFoundError:
     print("Error: 'Crop_recommendation.csv' not found. Cannot recreate Label Encoder.")
     exit()
+
 
 
 if __name__ == '__main__':
